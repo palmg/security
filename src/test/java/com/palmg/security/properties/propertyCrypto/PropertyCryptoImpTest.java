@@ -3,12 +3,13 @@ package com.palmg.security.properties.propertyCrypto;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.io.File;
+import java.io.IOException;
 import java.util.Properties;
 
 import org.junit.jupiter.api.Test;
 
 import com.palmg.security.properties.PropertyCrypto;
-import com.palmg.security.properties.entity.KeyDocument;
 import com.palmg.security.properties.exception.FileLoadException;
 import com.palmg.security.properties.exception.FileWriteException;
 
@@ -35,6 +36,24 @@ class PropertyCryptoImpTest {
 		} catch (FileWriteException | FileLoadException e) {
 			fail("Throw Exception :" + e);
 		}
-
+	}
+	
+	@Test
+	void testGenerateFileFromProperties() {
+		PropertyCrypto propertyCrypto = new PropertyCryptoImp();
+		try {
+			propertyCrypto.generateKeyFile();
+			propertyCrypto.generateSecretFile();
+			Properties p1 = new Properties();
+			p1.load(PropertyCryptoImpTest.class.getResourceAsStream("/securityInfomation.properties"));
+			final Properties p2 = propertyCrypto.decryptFile();
+			p1.entrySet().forEach(entry -> {
+				String key = entry.getKey().toString();
+				String value = entry.getValue().toString();
+				assertTrue(p2.getProperty(key).equals(value));
+			});
+		} catch (FileWriteException | FileLoadException | IOException e) {
+			fail("Throw Exception :" + e);
+		}
 	}
 }

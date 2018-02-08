@@ -16,6 +16,8 @@ public interface PropertyCrypto {
 
 	KeyDocument readKeyFile() throws FileLoadException;
 	
+	void generateSecretFile() throws FileWriteException;
+	
 	void generateSecretFile(Properties Properties) throws FileWriteException;
 
 	Properties decryptFile() throws FileLoadException ;

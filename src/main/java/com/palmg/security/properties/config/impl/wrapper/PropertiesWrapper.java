@@ -20,7 +20,7 @@ public class PropertiesWrapper {
 	String getValue(String key) {
 		String value = list[0].getProperty(key);
 		for (Properties p : list) {
-			value = p.getProperty(key);
+			value = p.getProperty(key, value);
 		}
 		return value;
 	}

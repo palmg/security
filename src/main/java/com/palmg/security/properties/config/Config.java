@@ -13,7 +13,8 @@ public interface Config {
 	String[] getLoadPath() throws ConfigException ;
 	String getWritePath() throws ConfigException ;
 	String getProfile() throws ConfigException ;
-	String getProfileFlag() throws ConfigException ;
-	String getCertificateFileName() throws ConfigException ;
+	String getProfileFlag() throws ConfigException;
+	String getPropertiesFileName() throws ConfigException;
+	String getCertificateFileName() throws ConfigException;
 	byte[] getSeed() throws ConfigException;
 }

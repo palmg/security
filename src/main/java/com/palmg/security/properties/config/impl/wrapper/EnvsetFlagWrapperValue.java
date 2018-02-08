@@ -26,7 +26,7 @@ public class EnvsetFlagWrapperValue<E> extends EnvsetWrapperValue<E> implements 
 			case "${user.home}":
 				values[index] = "file:" + System.getProperty("user.home") + "/";
 				break;
-			case "${user,dir}":
+			case "${user.dir}":
 				values[index] = "file:" + System.getProperty("user.dir") + "/";
 				break;
 			}

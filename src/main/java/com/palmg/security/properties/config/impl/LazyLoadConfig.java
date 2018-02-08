@@ -21,6 +21,7 @@ public class LazyLoadConfig implements Config {
 	private LoadWrapper<String> writePath;
 	private LoadWrapper<String> profile;
 	private LoadWrapper<String> profileFlag;
+	private LoadWrapper<String> propertiesFileName;
 	private LoadWrapper<String> certificateFileName;
 	private LoadWrapper<byte[]> seed;
 
@@ -50,7 +51,8 @@ public class LazyLoadConfig implements Config {
 
 	@Override
 	public String getWritePath() throws ConfigException {
-		return valueOf(writePath, "writePath", new EnvsetFlagWrapperValue<String>("palmg-security-writePath"));
+		return valueOf(writePath, "writePath", new EnvsetFlagWrapperValue<String>("palmg-security-writePath"))
+				.replace("file:", "").replace("classpath:", "");
 	}
 
 	@Override
@@ -64,17 +66,13 @@ public class LazyLoadConfig implements Config {
 	}
 
 	@Override
+	public String getPropertiesFileName() throws ConfigException {
+		return valueOf(propertiesFileName, "propertiesFileName");
+	}
+
+	@Override
 	public String getCertificateFileName() throws ConfigException {
-		final Config _this = this;
-		return valueOf(certificateFileName, "certificateFileName", new WrapperValue<String>() {
-			@Override
-			public String getValue(String property) throws ConfigException {
-				String flag = _this.getProfileFlag();
-				String profile = _this.getProfile();
-				property = property.replace(flag, profile);
-				return property;
-			}
-		});
+		return valueOf(certificateFileName, "certificateFileName");
 	}
 
 	@Override
@@ -114,6 +112,7 @@ public class LazyLoadConfig implements Config {
 
 	/**
 	 * 加载数据，环境变量数据默认为 palmg-security-${name}
+	 * 
 	 * @param loadWrapper
 	 * @param name
 	 * @return

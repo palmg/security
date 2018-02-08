@@ -3,24 +3,24 @@ package com.palmg.security.properties.propertyCrypto;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.charset.Charset;
-import java.security.InvalidKeyException;
 import java.security.Key;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Properties;
-
-import javax.crypto.BadPaddingException;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.NoSuchPaddingException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.core.io.support.ResourcePatternResolver;
 
 import com.palmg.security.properties.Cryptogram;
 import com.palmg.security.properties.CryptogramFactory;
@@ -63,13 +63,14 @@ public class PropertyCryptoImp implements PropertyCrypto {
 		} catch (ConfigException e) {
 			throw new FileWriteException("Generate write path error", e);
 		}
-		try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(path))) {
+		File file = new File(path);
+		try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(file))) {
 			Scheme scheme = config.getScheme();
 			Cryptogram crypto = CryptogramFactory.getInstance().getCryptogram(scheme);
 			Key key = crypto.generateKey(config.getSeed());
 			KeyDocument keyDoc = new KeyDocument(key.getEncoded(), scheme, config.getProfile());
 			out.writeObject(keyDoc);
-			Log.ins.info("Key file has generate:" + path);
+			Log.ins.info("Key file has generate:" + path + ". Current profie: " + config.getProfile());
 			return keyDoc;
 		} catch (ConfigException | NoSuchAlgorithmException | IOException e) {
 			throw new FileWriteException("Generate secret key certificate error", e);
@@ -78,11 +79,40 @@ public class PropertyCryptoImp implements PropertyCrypto {
 
 	@Override
 	public KeyDocument readKeyFile() throws FileLoadException {
-		try (ObjectInputStream in = new ObjectInputStream(new FileInputStream(getExistsKeyFile()))) {
+		try (ObjectInputStream in = new ObjectInputStream(getExistsKeyFile())) {
 			KeyDocument keyDoc = (KeyDocument) in.readObject();
 			return keyDoc;
 		} catch (IOException | ClassNotFoundException e) {
 			throw new FileLoadException("Load secret key certificate error", e);
+		}
+	}
+
+	@Override
+	public void generateSecretFile() throws FileWriteException {
+		try {
+			Config config = ConfigFactory.ins.getConfig();
+			String[] paths = config.getLoadPath();
+			final String fileName = config.getPropertiesFileName();
+			boolean isLoadProperties = false;
+			ResourcePatternResolver resourceLoader = new PathMatchingResourcePatternResolver();
+			List<String> checkList = new LinkedList<>();
+			for (String path : paths) {
+				String temp = path + fileName;
+				checkList.add(temp);
+				Resource resource = resourceLoader.getResource(temp);
+				if (resource.exists()) {
+					Properties properties = new Properties();
+					properties.load(resource.getInputStream());
+					isLoadProperties = true;
+					generateSecretFile(properties);
+					break;
+				}
+			}
+			if(false == isLoadProperties) {
+				throw new FileWriteException("Properties file not exists in such path:" + checkList);
+			}
+		} catch (ConfigException | IOException e) {
+			throw new FileWriteException("",e);
 		}
 	}
 
@@ -124,27 +154,28 @@ public class PropertyCryptoImp implements PropertyCrypto {
 		return properties;
 	}
 
-	private String getExistsKeyFile() throws FileLoadException {
-		String filePath = null;
+	private InputStream getExistsKeyFile() throws FileLoadException {
+		InputStream inputStream = null;
 		Config config = ConfigFactory.ins.getConfig();
 		try {
 			final String[] paths = config.getLoadPath();
 			final String fileName = config.getKeyFileName();
+			ResourcePatternResolver resourceLoader = new PathMatchingResourcePatternResolver();
 			for (String path : paths) {
 				String temp = path + fileName;
-				File file = new File(temp);
-				if (file.exists()) {
-					filePath = temp;
+				Resource resource = resourceLoader.getResource(temp);
+				if (resource.exists()) {
+					inputStream = resource.getInputStream();
 					break;
 				}
 			}
-		} catch (ConfigException e) {
+		} catch (ConfigException | IOException e) {
 			throw new FileLoadException("Load Secret key certificate Error!", e);
 		}
-		if (null == filePath) {
+		if (null == inputStream) {
 			throw new FileLoadException("Secret key certificate not exists!");
 		}
-		return filePath;
+		return inputStream;
 	}
 
 	/**
@@ -202,7 +233,7 @@ public class PropertyCryptoImp implements PropertyCrypto {
 
 	private void write(String profile, byte[] text) throws FileWriteException, ConfigException {
 		Config config = ConfigFactory.ins.getConfig();
-		File file = new File(config.getWritePath() + config.getCertificateFileName());
+		File file = new File(config.getWritePath() + config.getCertificateFileName().replace(config.getProfileFlag(), profile));
 		try (FileOutputStream fos = new FileOutputStream(file)) {
 			if (!file.exists()) {
 				file.createNewFile();
@@ -218,23 +249,59 @@ public class PropertyCryptoImp implements PropertyCrypto {
 	private byte[] read(String profile) throws FileLoadException, ConfigException {
 		Config config = ConfigFactory.ins.getConfig();
 		String[] paths = config.getLoadPath();
-		String fileName = config.getCertificateFileName();
-		File file = null;
+		String fileName = config.getCertificateFileName().replace(config.getProfileFlag(), profile);
+		ResourcePatternResolver resourceLoader = new PathMatchingResourcePatternResolver();
+		Resource resource = null;
 		for (String path : paths) {
-			file = new File(path + fileName);
-			if (file.exists())
+			resource = resourceLoader.getResource(path + fileName);
+			if (resource.exists()) {
+				LOG.info("Ciphertext File has read from: " + resource.getDescription());
 				break;
-		}
-		if (file.exists()) {
-			byte[] result = new byte[(int) file.length()];
-			try (FileInputStream is = new FileInputStream(file)) {
-				is.read(result);
-			} catch (IOException e) {
-				throw new FileLoadException("read file error:" + file.getPath(), e);
 			}
-			return result;
-		} else {
-			throw new FileLoadException("File is not exists:" + file.getPath());
 		}
+		if (resource.exists()) {
+			final int bufferSize = 100;
+			int readLen = 0;
+			byte[] buffer = new byte[bufferSize];
+			ByteReader reader = null;
+			try (InputStream is = resource.getInputStream()) {
+				reader = new ByteReader();
+				while (-1 != (readLen = is.read(buffer, 0, bufferSize))) {
+					reader.add(buffer, readLen);
+				}
+			} catch (IOException e) {
+				throw new FileLoadException("read file error:", e);
+			}
+			return reader.get();
+		} else {
+			throw new FileLoadException("File is not exists!");
+		}
+	}
+}
+
+class ByteReader {
+	private List<byte[]> buffers;
+	private int length;
+
+	public ByteReader() {
+		buffers = new LinkedList<byte[]>();
+		length = 0;
+	}
+
+	public void add(byte[] data, int offset) {
+		length += offset;
+		byte[] mem = new byte[offset];
+		System.arraycopy(data, 0, mem, 0, offset);
+		buffers.add(mem);
+	}
+
+	public byte[] get() {
+		byte[] result = new byte[length];
+		int offset = 0;
+		for (byte[] bytes : buffers) {
+			System.arraycopy(bytes, 0, result, offset, bytes.length);
+			offset += bytes.length;
+		}
+		return result;
 	}
 }
