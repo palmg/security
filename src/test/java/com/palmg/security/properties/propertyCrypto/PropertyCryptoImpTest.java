@@ -3,7 +3,6 @@ package com.palmg.security.properties.propertyCrypto;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Properties;
 
