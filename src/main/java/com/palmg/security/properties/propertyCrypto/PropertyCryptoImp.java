@@ -63,24 +63,40 @@ public class PropertyCryptoImp implements PropertyCrypto {
 		} catch (ConfigException e) {
 			throw new FileWriteException("Generate write path error", e);
 		}
-		File file = new File(path);
-		try (ObjectOutputStream out = new ObjectOutputStream(new FileOutputStream(file))) {
+		try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
+				ObjectOutputStream oos = new ObjectOutputStream(bos);
+				FileOutputStream fos = new FileOutputStream(path); 
+				) {
 			Scheme scheme = config.getScheme();
 			Cryptogram crypto = CryptogramFactory.getInstance().getCryptogram(scheme);
 			Key key = crypto.generateKey(config.getSeed());
-			KeyDocument keyDoc = new KeyDocument(key.getEncoded(), scheme, config.getProfile());
-			out.writeObject(keyDoc);
+			KeyDocument doc = new KeyDocument(key.getEncoded(), scheme, config.getProfile());
+			oos.writeObject(doc);
+			byte[] bytes = bos.toByteArray();
+			byte[] base64Byte = Base64.getEncoder().encode(bytes);
+			fos.write(base64Byte);
 			Log.ins.info("Key file has generate:" + path + ". Current profie: " + config.getProfile());
-			return keyDoc;
+			return doc;
 		} catch (ConfigException | NoSuchAlgorithmException | IOException e) {
 			throw new FileWriteException("Generate secret key certificate error", e);
 		}
 	}
-
+	
 	@Override
 	public KeyDocument readKeyFile() throws FileLoadException {
-		try (ObjectInputStream in = new ObjectInputStream(getExistsKeyFile())) {
-			KeyDocument keyDoc = (KeyDocument) in.readObject();
+		try (InputStream in = getExistsKeyFile()) {
+			byte[] buffer = new byte[1024];
+			byte[] base64Byte = new byte[0];
+			int len = 0;
+			while( (len = in.read(buffer)) != -1) {
+				byte[] temp = base64Byte;
+				base64Byte = new byte[temp.length + len];
+				System.arraycopy(temp, 0, base64Byte, 0, temp.length);
+				System.arraycopy(buffer, 0, base64Byte, temp.length, len);
+			}
+			byte[] oriByte = Base64.getDecoder().decode(base64Byte);
+			ObjectInputStream ois = new ObjectInputStream(new ByteArrayInputStream(oriByte));
+			KeyDocument keyDoc = (KeyDocument) ois.readObject();
 			return keyDoc;
 		} catch (IOException | ClassNotFoundException e) {
 			throw new FileLoadException("Load secret key certificate error", e);
@@ -126,7 +142,7 @@ public class PropertyCryptoImp implements PropertyCrypto {
 			Cryptogram cryptogram = CryptogramFactory.getInstance().getCryptogram(keyDoc.getScheme());
 			byte[] plaintext = encrypt(text);
 			byte[] ciphertext = cryptogram.encrypt(keyDoc.getKey(), plaintext);
-			byte[] base64url = Base64.getUrlEncoder().encode(ciphertext);
+			byte[] base64url = Base64.getEncoder().encode(ciphertext);
 			write(keyDoc.getProfile(), base64url);
 		} catch (Exception e) {
 			throw new FileWriteException("Generate secret file error", e);
@@ -139,7 +155,7 @@ public class PropertyCryptoImp implements PropertyCrypto {
 		byte[] text = null;
 		try {
 			KeyDocument keyDoc = readKeyFile();
-			byte[] ciphertext = Base64.getUrlDecoder().decode(read(keyDoc.getProfile()));
+			byte[] ciphertext = Base64.getDecoder().decode(read(keyDoc.getProfile()));
 			Cryptogram cryptogram = CryptogramFactory.getInstance().getCryptogram(keyDoc.getScheme());
 			byte[] plaintext = cryptogram.decrypt(keyDoc.getKey(), ciphertext);
 			text = decrypt(plaintext);

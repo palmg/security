@@ -36,7 +36,7 @@ class PropertyCryptoImpTest {
 			fail("Throw Exception :" + e);
 		}
 	}
-	
+
 	@Test
 	void testGenerateFileFromProperties() {
 		PropertyCrypto propertyCrypto = new PropertyCryptoImp();
